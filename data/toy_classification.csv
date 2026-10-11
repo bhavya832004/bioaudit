@@ -1,0 +1,22 @@
+id,sequence,label,family,description
+nucleus_fam_1,MKWVTFISLLFLFSSAYSRGVFRRHHHKKA,nucleus,nucleus_fam,synthetic nucleus member of nucleus_fam
+nucleus_fam_2,MKWVTFISLLFLFSSAYSRGVFRRHHHKKC,nucleus,nucleus_fam,synthetic nucleus member of nucleus_fam
+nucleus_fam_3,MKWVTFISLLFLFSSAYSRGVFRRHHHKKD,nucleus,nucleus_fam,synthetic nucleus member of nucleus_fam
+nucleus_fam2_1,QPLARNWYSTCMNDEAAAWWWYYYTTTNNA,nucleus,nucleus_fam2,synthetic nucleus member of nucleus_fam2
+nucleus_fam2_2,QPLARNWYSTCMNDEAAAWWWYYYTTTNNC,nucleus,nucleus_fam2,synthetic nucleus member of nucleus_fam2
+nucleus_fam2_3,QPLARNWYSTCMNDEAAAWWWYYYTTTNND,nucleus,nucleus_fam2,synthetic nucleus member of nucleus_fam2
+cyto_fam_1,GAVLIPFYWSTCMNQDEKRHDDEEFFQQQA,cytoplasm,cyto_fam,synthetic cytoplasm member of cyto_fam
+cyto_fam_2,GAVLIPFYWSTCMNQDEKRHDDEEFFQQQC,cytoplasm,cyto_fam,synthetic cytoplasm member of cyto_fam
+cyto_fam_3,GAVLIPFYWSTCMNQDEKRHDDEEFFQQQD,cytoplasm,cyto_fam,synthetic cytoplasm member of cyto_fam
+cyto_fam2_1,NNNNCCCCEEEEPPPPYYYYTTTTSSSSAA,cytoplasm,cyto_fam2,synthetic cytoplasm member of cyto_fam2
+cyto_fam2_2,NNNNCCCCEEEEPPPPYYYYTTTTSSSSAC,cytoplasm,cyto_fam2,synthetic cytoplasm member of cyto_fam2
+cyto_fam2_3,NNNNCCCCEEEEPPPPYYYYTTTTSSSSAD,cytoplasm,cyto_fam2,synthetic cytoplasm member of cyto_fam2
+mem_fam_1,IIIIVVVVLGAVLISTAAAWWWMMMGGGTA,membrane,mem_fam,synthetic membrane member of mem_fam
+mem_fam_2,IIIIVVVVLGAVLISTAAAWWWMMMGGGTC,membrane,mem_fam,synthetic membrane member of mem_fam
+mem_fam_3,IIIIVVVVLGAVLISTAAAWWWMMMGGGTD,membrane,mem_fam,synthetic membrane member of mem_fam
+mem_fam2_1,LLLLFFFAAACDEFGHIKLMNPQRSTVVVA,membrane,mem_fam2,synthetic membrane member of mem_fam2
+mem_fam2_2,LLLLFFFAAACDEFGHIKLMNPQRSTVVVC,membrane,mem_fam2,synthetic membrane member of mem_fam2
+mem_fam2_3,LLLLFFFAAACDEFGHIKLMNPQRSTVVVD,membrane,mem_fam2,synthetic membrane member of mem_fam2
+nucleus_unique,WWYYPPPGGGAAAQQQNNNNCCCC,nucleus,nucleus_unique,synthetic singleton nucleus
+cyto_unique,RRRTTTSSSMMMKKKEEEVVVQQQ,cytoplasm,cyto_unique,synthetic singleton cytoplasm
+mem_unique,FFFFLLLLIIIIYYYYHHHHWWWW,membrane,mem_unique,synthetic singleton membrane

@@ -1,0 +1,10 @@
+>P001 sample_protein_alpha
+MKWVTFISLLFLFSSAYS
+>P002 sample_protein_alpha_duplicate
+MKWVTFISLLFLFSSAYS
+>P003 related_protein
+MKWVTFISLLFLFSSAYT
+>P004 unrelated_sample
+GAVLIPFYWSTCMNQDEKRH
+>P005 short_sample
+MKWVTF

@@ -1,0 +1,26 @@
+# Default experiment uses the synthetic toy fixture (offline).
+# Do not report these metrics as a scientific benchmark.
+dataset:
+  path: data/toy_classification.csv
+  sequence_column: sequence
+  label_column: label
+  source: toy
+split:
+  test_size: 0.3
+  val_size: 0.2
+  homology_threshold: 0.7
+  homology_k: 3
+  homology_backend: kmer
+model:
+  name: kmer_logistic_regression
+  k: 3
+  C: 1.0
+  max_iter: 400
+metrics:
+  primary: macro_f1
+seeds:
+  - 0
+  - 1
+  - 2
+output:
+  prefix: reports/experiment_toy
