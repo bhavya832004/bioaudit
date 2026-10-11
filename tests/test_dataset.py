@@ -4,8 +4,10 @@ from urllib.error import URLError
 import pytest
 
 from bioaudit.dataset import (
+    download_deeploc_localization,
     download_uniprot_fasta,
     generate_toy_classification_records,
+    parse_deeploc_single_label_rows,
     write_toy_classification_csv,
 )
 from bioaudit.io import read_records
@@ -79,3 +81,34 @@ def test_uniprot_retries_then_fails(tmp_path):
 def test_uniprot_limit_bounds(tmp_path):
     with pytest.raises(ValueError, match="limit"):
         download_uniprot_fasta(0, tmp_path / "x.fasta")
+
+
+DEEPLOC_CSV = """ACC,Sequence,Partition,Kingdom,Cell membrane,Cytoplasm,Endoplasmic reticulum,Extracellular,Golgi apparatus,Lysosome/Vacuole,Mitochondrion,Nucleus,Peroxisome,Plastid
+P1,MKWVTFISLLFLFSSAYSRGVFRRDTHKSEIAHRFKDLGEEHFKGLVLIAFSQYLQQCP,0,Metazoa,0,0,0,0,0,0,0,1,0,0
+P2,MKWVTFISLLFLFSSAYSRGVFRRDTHKSEIAHRFKDLGEEHFKGLVLIAFSQYLQQCA,0,Metazoa,0,1,0,0,0,0,0,1,0,0
+P3,GAVLIPFYWSTCMNQDEKRHIIIIVVVVLLLLFFFFYYYYWWWWMMMMCCCCAAAAKK,1,Metazoa,1,0,0,0,0,0,0,0,0,0
+P4,SHORT,0,Metazoa,0,0,0,0,0,0,0,1,0,0
+"""
+
+
+def test_parse_deeploc_keeps_single_label_only():
+    rows = parse_deeploc_single_label_rows(DEEPLOC_CSV)
+    ids = [r["id"] for r in rows]
+    assert ids == ["P1", "P3"]
+    assert rows[0]["label"] == "Nucleus"
+    assert rows[1]["label"] == "Cell membrane"
+    assert rows[0]["partition"] == "0"
+
+
+def test_deeploc_download_mocked(tmp_path):
+    def opener(request, timeout=90):
+        assert "DeepLoc" in request.full_url
+        return _DummyResponse(DEEPLOC_CSV.encode("utf-8"))
+
+    out = tmp_path / "deeploc.csv"
+    path, manifest = download_deeploc_localization(out, limit=10, timeout=5, opener=opener)
+    records = read_records(path, label_column="label")
+    assert len(records) == 2
+    assert records[0]["partition"] == "0"
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    assert payload["suitable_supervised_benchmark"] is True

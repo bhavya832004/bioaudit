@@ -6,3 +6,6 @@ __pycache__/
 reports/
 data/uniprot_human_reviewed.fasta
 data/uniprot_human_reviewed.fasta.manifest.json
+data/deeploc_swissprot_train_validation.csv
+data/deeploc_single_label.csv
+data/deeploc_single_label.csv.manifest.json

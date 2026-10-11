@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 import csv
+import shutil
+import ssl
+import subprocess
+import tempfile
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+
+import pandas as pd
 
 from .io import read_fasta
 from .provenance import sha256_bytes, sha256_file, utc_now_iso, write_manifest
@@ -14,8 +20,30 @@ from .provenance import sha256_bytes, sha256_file, utc_now_iso, write_manifest
 UNIPROT_STREAM = "https://rest.uniprot.org/uniprotkb/stream"
 UNIPROT_QUERY = "(reviewed:true) AND (organism_id:9606)"
 UNIPROT_TERMS = "https://www.uniprot.org/help/license"
+DEEPLOC_TRAIN_URL = (
+    "https://services.healthtech.dtu.dk/services/DeepLoc-2.0/data/"
+    "Swissprot_Train_Validation_dataset.csv"
+)
+DEEPLOC_CITATION = (
+    "Thumuluri et al., DeepLoc 2.0: multi-label subcellular localization prediction "
+    "using protein language models. Nucleic Acids Research (2022). "
+    "https://doi.org/10.1093/nar/gkac278"
+)
+DEEPLOC_LOCATION_COLUMNS = [
+    "Cell membrane",
+    "Cytoplasm",
+    "Endoplasmic reticulum",
+    "Extracellular",
+    "Golgi apparatus",
+    "Lysosome/Vacuole",
+    "Mitochondrion",
+    "Nucleus",
+    "Peroxisome",
+    "Plastid",
+]
 DEFAULT_TIMEOUT = 90
 MAX_UNIPROT_LIMIT = 10000
+MAX_DEEPLOC_LIMIT = 30000
 
 
 def generate_toy_classification_records() -> list[dict]:
@@ -173,3 +201,172 @@ def download_uniprot_fasta(
 
 def _manifest_path(data_path: Path) -> Path:
     return data_path.with_name(data_path.name + ".manifest.json")
+
+
+def _curl_get(url: str, timeout: int) -> str:
+    curl = shutil.which("curl") or shutil.which("curl.exe")
+    if not curl:
+        raise RuntimeError("curl is not available to retry the download after an SSL error")
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as handle:
+        dest = Path(handle.name)
+    try:
+        proc = subprocess.run(
+            [curl, "-fsSL", "--max-time", str(timeout), "-o", str(dest), url],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(proc.stderr.strip() or f"curl exited {proc.returncode}")
+        return dest.read_text(encoding="utf-8")
+    finally:
+        dest.unlink(missing_ok=True)
+
+
+def _http_get(url: str, timeout: int, opener, retries: int) -> str:
+    request = Request(url, headers={"User-Agent": "BioAudit/0.1 (educational project)"})
+    content = None
+    last_error: Exception | None = None
+    attempts = max(1, retries + 1)
+    for _ in range(attempts):
+        try:
+            with opener(request, timeout=timeout) as response:
+                raw = response.read()
+            content = raw.decode("utf-8")
+            last_error = None
+            break
+        except (HTTPError, URLError, TimeoutError, OSError, ssl.SSLError) as exc:
+            last_error = exc
+    if content is not None:
+        return content
+    ssl_failure = isinstance(last_error, ssl.SSLError) or "CERTIFICATE" in str(last_error)
+    if ssl_failure and opener is urlopen:
+        try:
+            return _curl_get(url, timeout)
+        except Exception as curl_exc:
+            raise RuntimeError(
+                f"Download failed for {url}: {last_error}; curl fallback: {curl_exc}"
+            ) from last_error
+    raise RuntimeError(f"Download failed for {url}: {last_error}") from last_error
+
+
+def _is_positive(value: object) -> bool:
+    if value is True:
+        return True
+    try:
+        if pd.isna(value):
+            return False
+    except (TypeError, ValueError):
+        pass
+    text = str(value).strip().lower()
+    return text in {"1", "1.0", "true", "yes"} or text == "1"
+
+
+def parse_deeploc_single_label_rows(text: str, limit: int | None = None) -> list[dict]:
+    """Keep proteins with exactly one of the ten DeepLoc location flags."""
+    from io import StringIO
+
+    df = pd.read_csv(StringIO(text))
+    missing = [col for col in ["ACC", "Sequence", *DEEPLOC_LOCATION_COLUMNS] if col not in df.columns]
+    if missing:
+        raise ValueError(
+            "DeepLoc CSV is missing expected columns "
+            f"{missing}. Available: {list(df.columns)}"
+        )
+    records = []
+    skipped_multi = 0
+    skipped_none = 0
+    for _, row in df.iterrows():
+        positives = [col for col in DEEPLOC_LOCATION_COLUMNS if _is_positive(row[col])]
+        if len(positives) == 0:
+            skipped_none += 1
+            continue
+        if len(positives) > 1:
+            skipped_multi += 1
+            continue
+        seq = "".join(str(row["Sequence"]).split()).upper()
+        if len(seq) < 40:
+            continue
+        partition = row["Partition"] if "Partition" in df.columns else None
+        records.append({
+            "id": str(row["ACC"]),
+            "sequence": seq,
+            "label": positives[0],
+            "partition": "" if pd.isna(partition) else str(int(partition) if float(partition).is_integer() else partition),
+            "kingdom": "" if "Kingdom" not in df.columns or pd.isna(row["Kingdom"]) else str(row["Kingdom"]),
+        })
+        if limit is not None and len(records) >= limit:
+            break
+    if not records:
+        raise RuntimeError(
+            "No single-label DeepLoc records remained after filtering. "
+            f"Skipped multi-label={skipped_multi}, no-label={skipped_none}."
+        )
+    return records
+
+
+def download_deeploc_localization(
+    out: str | Path,
+    limit: int | None = 3000,
+    timeout: int = 180,
+    opener=urlopen,
+    retries: int = 1,
+    raw_out: str | Path | None = None,
+) -> tuple[Path, Path]:
+    """Download DeepLoc 2.0 train/validation CSV and write a single-label subset.
+
+    Multi-label proteins are excluded so the current logistic baseline has one class
+    per sequence. DeepLoc homology partitions are preserved in the ``partition`` column.
+    """
+    if limit is not None and not 1 <= limit <= MAX_DEEPLOC_LIMIT:
+        raise ValueError(f"DeepLoc --limit must be between 1 and {MAX_DEEPLOC_LIMIT}")
+    content = _http_get(DEEPLOC_TRAIN_URL, timeout, opener, retries)
+    if "ACC" not in content.splitlines()[0]:
+        raise RuntimeError(
+            "DeepLoc download did not look like the expected CSV (missing ACC header). "
+            "Check the URL and that the response is not an HTML error page."
+        )
+    raw_path = Path(raw_out or Path(out).with_name("deeploc_swissprot_train_validation.csv"))
+    raw_path.parent.mkdir(parents=True, exist_ok=True)
+    raw_path.write_text(content, encoding="utf-8")
+    records = parse_deeploc_single_label_rows(content, limit=limit)
+    out_path = Path(out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with out_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["id", "sequence", "label", "partition", "kingdom"])
+        writer.writeheader()
+        writer.writerows(records)
+    label_counts: dict[str, int] = {}
+    for rec in records:
+        label_counts[rec["label"]] = label_counts.get(rec["label"], 0) + 1
+    manifest = write_manifest(
+        _manifest_path(out_path),
+        {
+            "source": "DeepLoc 2.0 Swiss-Prot train/validation set (DTU Health Tech)",
+            "source_url": DEEPLOC_TRAIN_URL,
+            "citation": DEEPLOC_CITATION,
+            "terms_note": (
+                "Data are derived from UniProt and redistributed by the DeepLoc authors. "
+                "Cite DeepLoc 2.0 and UniProt. Do not treat this copy as our dataset."
+            ),
+            "requested_limit": limit,
+            "record_count": len(records),
+            "label_counts": label_counts,
+            "path": str(out_path),
+            "raw_path": str(raw_path),
+            "raw_sha256": sha256_file(raw_path),
+            "sha256": sha256_file(out_path),
+            "retrieved_at_utc": utc_now_iso(),
+            "timeout_seconds": timeout,
+            "preprocessing": [
+                "Downloaded official DeepLoc 2.0 training/validation CSV",
+                "Kept proteins with exactly one of ten location labels",
+                "Dropped sequences shorter than 40 residues",
+                "Preserved DeepLoc homology Partition (0-4, max 30% sequence similarity)",
+                f"Capped processed output at {limit} records" if limit else "No processed-record cap",
+            ],
+            "suitable_supervised_benchmark": True,
+            "label_policy": "single-location only; multi-label proteins excluded",
+        },
+    )
+    return out_path, manifest

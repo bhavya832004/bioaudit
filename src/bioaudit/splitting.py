@@ -57,6 +57,19 @@ def cluster_records(
     return [sorted(members) for members in groups.values()]
 
 
+def cluster_by_field(records: list[dict], field: str = "partition") -> list[list[int]]:
+    """Group records that share a dataset-provided cluster/partition id."""
+    groups: dict[str, list[int]] = defaultdict(list)
+    singletons = []
+    for i, rec in enumerate(records):
+        key = rec.get(field)
+        if key is None or str(key).strip() == "":
+            singletons.append([i])
+        else:
+            groups[str(key)].append(i)
+    return [sorted(members) for members in groups.values()] + singletons
+
+
 def random_stratified_split(
     records: list[dict],
     *,

@@ -15,8 +15,15 @@ from .audit import audit_records
 from .io import read_records
 from .metrics import classification_metrics
 from .provenance import environment_metadata, utc_now_iso
-from .similarity.kmer import kmer_split_audit
-from .splitting import cluster_records, homology_aware_split, random_stratified_split, split_summary
+from .similarity.kmer import DEFAULT_MAX_PAIRS, kmer_split_audit
+from .splitting import (
+    cluster_by_field,
+    cluster_records,
+    homology_aware_split,
+    random_stratified_split,
+    split_summary,
+)
+from .similarity.kmer import DEFAULT_MAX_PAIRS
 
 
 def load_experiment_config(path: str | Path) -> dict[str, Any]:
@@ -68,17 +75,32 @@ def _evaluate_split(
     classes = list(model.named_steps["clf"].classes_)
     proba = model.predict_proba([r["sequence"] for r in test])
     metrics = classification_metrics(y_test, y_pred, y_proba=proba, labels=sorted(set(y_train) | set(y_test)))
-    leakage = kmer_split_audit(train, test, threshold=homology_threshold, k=k, allow_quadratic=True)
+    n_pairs = len(train) * len(test)
+    leakage: dict[str, Any]
+    if n_pairs > DEFAULT_MAX_PAIRS:
+        leakage = {
+            "metric": "kmer_jaccard",
+            "threshold": homology_threshold,
+            "skipped": True,
+            "reason": f"train×test pairs ({n_pairs}) exceed max_pairs={DEFAULT_MAX_PAIRS}",
+            "test_records_with_hits": None,
+            "test_fraction_with_hits": None,
+            "score_distribution": None,
+        }
+    else:
+        audit = kmer_split_audit(train, test, threshold=homology_threshold, k=k, allow_quadratic=False)
+        leakage = {
+            "metric": audit["metric"],
+            "threshold": homology_threshold,
+            "skipped": False,
+            "test_records_with_hits": len(audit["hits"]),
+            "test_fraction_with_hits": round(len(audit["hits"]) / len(test), 5) if test else 0.0,
+            "score_distribution": audit.get("score_distribution"),
+        }
     return {
         "split_sizes": split_summary(records, parts),
         "metrics": metrics,
-        "leakage": {
-            "metric": leakage["metric"],
-            "threshold": homology_threshold,
-            "test_records_with_hits": leakage and len(leakage["hits"]),
-            "test_fraction_with_hits": round(len(leakage["hits"]) / len(test), 5) if test else 0.0,
-            "score_distribution": leakage.get("score_distribution"),
-        },
+        "leakage": leakage,
         "model_classes": classes,
         "val_count": len(parts.get("val") or []),
     }
@@ -104,7 +126,13 @@ def run_experiment(config: dict[str, Any], *, config_path: str | Path | None = N
     val_size = float(split_cfg.get("val_size", 0.2))
     hom_threshold = float(split_cfg.get("homology_threshold", 0.7))
     hom_k = int(split_cfg.get("homology_k", k))
-    clusters = cluster_records(records, threshold=hom_threshold, k=hom_k)
+    homology_backend = str(split_cfg.get("homology_backend", "kmer"))
+    if homology_backend == "dataset_partition":
+        clusters = cluster_by_field(records, "partition")
+        cluster_method = "dataset_partition"
+    else:
+        clusters = cluster_records(records, threshold=hom_threshold, k=hom_k)
+        cluster_method = "kmer_jaccard"
 
     per_seed = []
     for seed in seeds:
@@ -155,6 +183,7 @@ def run_experiment(config: dict[str, Any], *, config_path: str | Path | None = N
         },
         "n_clusters": len(clusters),
         "cluster_sizes": sorted(len(c) for c in clusters),
+        "cluster_method": cluster_method,
         "seeds": per_seed,
         "mean_macro_f1_difference_pp": mean_delta,
         "interpretation": (
@@ -164,7 +193,7 @@ def run_experiment(config: dict[str, Any], *, config_path: str | Path | None = N
         ),
         "limitations": [
             "Baseline is character k-mer counts plus logistic regression, not a protein language model.",
-            "Homology clusters use k-mer Jaccard connected components unless a later MMseqs2 clustering path is used.",
+            "Homology clusters use DeepLoc partitions when homology_backend=dataset_partition, otherwise k-mer Jaccard components.",
             "Validation partitions are held out and are not used for model selection in this baseline.",
         ],
     }

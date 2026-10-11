@@ -17,6 +17,12 @@
 - **Terms:** UniProt license; this repository does not commit the FASTA
 - **Not used as:** the default supervised benchmark (no canonical classification label)
 
-## Candidate public benchmark (not downloaded)
+## DeepLoc 2.0 (downloaded locally, not committed)
 
-Protein subcellular localization on a public set with a clear citation (for example DeepLoc 2.0 or UniProt location annotations) remains the intended real experiment. Confirm license and size before downloading.
+- **Source:** [DeepLoc 2.0 training/validation set](https://services.healthtech.dtu.dk/services/DeepLoc-2.0/)
+- **URL:** `https://services.healthtech.dtu.dk/services/DeepLoc-2.0/data/Swissprot_Train_Validation_dataset.csv`
+- **Citation:** Thumuluri et al., *Nucleic Acids Research* (2022). https://doi.org/10.1093/nar/gkac278
+- **Origin:** UniProt Swiss-Prot eukaryotic proteins with experimental location annotations; homology-partitioned at 30% identity (column `Partition`)
+- **Local files:** `data/deeploc_swissprot_train_validation.csv` (raw), `data/deeploc_single_label.csv` (processed)
+- **Processing:** keep length ≥ 40 and exactly one of ten location flags; cap with `--limit` (3000 used in the first local download)
+- **Not redistributed** in this git repository. Re-download with `python scripts/prepare_dataset.py --source deeploc`

@@ -80,15 +80,24 @@ def read_csv_sequences(
                 label = None
             else:
                 label = str(raw_label)
-        record_id = row["id"] if "id" in df.columns else i
-        if "id" in df.columns and pd.isna(record_id):
+        if "id" in df.columns:
+            record_id = row["id"]
+        elif "ACC" in df.columns:
+            record_id = row["ACC"]
+        else:
             record_id = i
-        records.append({
+        if pd.isna(record_id):
+            record_id = i
+        record = {
             "id": str(record_id),
             "description": "",
             "sequence": seq,
             "label": label,
-        })
+        }
+        if "partition" in df.columns:
+            raw_part = row["partition"]
+            record["partition"] = None if pd.isna(raw_part) else str(raw_part)
+        records.append(record)
     return records
 
 

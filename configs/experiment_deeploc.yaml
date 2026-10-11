@@ -1,0 +1,24 @@
+# Real labeled data after: python scripts/prepare_dataset.py --source deeploc --limit 3000
+# Cite Thumuluri et al. 2022 (DeepLoc 2.0) and UniProt. Multi-label proteins are excluded.
+dataset:
+  path: data/deeploc_single_label.csv
+  sequence_column: sequence
+  label_column: label
+  source: deeploc
+split:
+  test_size: 0.3
+  val_size: 0.2
+  homology_threshold: 0.3
+  homology_k: 3
+  homology_backend: dataset_partition
+model:
+  name: kmer_logistic_regression
+  k: 3
+  C: 1.0
+  max_iter: 800
+metrics:
+  primary: macro_f1
+seeds:
+  - 0
+output:
+  prefix: reports/experiment_deeploc

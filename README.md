@@ -100,10 +100,14 @@ MMseqs2 must be installed separately and on PATH for `--backend mmseqs`.
 | Dataset | Role | Terms |
 | --- | --- | --- |
 | `data/sample_proteins.fasta` | Offline smoke test | Synthetic; MIT project code |
-| `data/toy_classification.csv` | Default experiment fixture | Synthetic labels/sequences; **not** a scientific benchmark |
-| UniProtKB reviewed human proteins | Optional ingestion demo | [UniProt license](https://www.uniprot.org/help/license); not committed; not the supervised benchmark |
+| `data/toy_classification.csv` | Default experiment fixture (offline tests) | Synthetic; **not** a scientific benchmark |
+| DeepLoc 2.0 Swiss-Prot locations | Real labeled experiment (`configs/experiment_deeploc.yaml`) | Cite Thumuluri et al. 2022 and UniProt; gitignored; re-download with `--source deeploc` |
+| UniProtKB reviewed human FASTA | Optional unlabeled ingestion demo | [UniProt license](https://www.uniprot.org/help/license); not committed |
 
-A public localization dataset (for example DeepLoc) was **not downloaded**. Confirm license and size before using one. Details: `data/README.md` and `docs/dataset_card.md`.
+```bash
+python scripts/prepare_dataset.py --source deeploc --limit 3000 --out data/deeploc_single_label.csv
+bioaudit experiment configs/experiment_deeploc.yaml
+```
 
 ## Experiment (executed on the toy fixture)
 

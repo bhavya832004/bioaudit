@@ -1,5 +1,6 @@
 from bioaudit.dataset import generate_toy_classification_records
 from bioaudit.splitting import (
+    cluster_by_field,
     cluster_partition_violations,
     cluster_records,
     homology_aware_split,
@@ -28,6 +29,17 @@ def test_homology_split_does_not_split_clusters():
     assert cluster_partition_violations(clusters, parts) == []
     assigned = set(parts["train"]) | set(parts["val"]) | set(parts["test"])
     assert assigned == set(range(len(records)))
+
+
+def test_cluster_by_partition_field():
+    records = [
+        {"id": "a", "partition": "0"},
+        {"id": "b", "partition": "0"},
+        {"id": "c", "partition": "1"},
+    ]
+    clusters = cluster_by_field(records, "partition")
+    sizes = sorted(len(c) for c in clusters)
+    assert sizes == [1, 2]
 
 
 def test_random_split_sizes():
